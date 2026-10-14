@@ -1,0 +1,555 @@
+{
+  "name": "Tugas 5 - Sentimen Analisis",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "eaf60952-eaf2-49e4-a2fa-cc3bb7784840",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        496,
+        16
+      ],
+      "id": "51c6e1ee-83f5-4d6b-ac6f-fd0e9670c2e6",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const getNewsData = (nodeName) => {\n  try {\n    const results = $(nodeName).all();\n    const data = results[0].json;\n    return data.news || data.organic || [];\n  } catch (e) {\n    return [];\n  }\n};\n\nconst brand1Results = getNewsData('Wardah');\nconst brand2Results = getNewsData('Camille Beauty');\nconst brand3Results = getNewsData('Glad2Glow');\n\nconst currentTime = DateTime.now().toFormat('yyyy-MM-dd HH:mm');\n\nreturn [\n  ...brand1Results.map(i => ({ json: { ...i, brand: 'Wardah', processedAt: currentTime } })),\n  ...brand2Results.map(i => ({ json: { ...i, brand: 'Camille Beauty', processedAt: currentTime } })),\n  ...brand3Results.map(i => ({ json: { ...i, brand: 'Glad2Glow', processedAt: currentTime } }))\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        32
+      ],
+      "id": "3cd97bf4-5926-48d4-af0e-186e54012de2",
+      "name": "Gabungkan Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst total = allItems.length;\n\nconst countBrand = (name) => allItems.filter(i => i.json.brand === name).length;\n\nconst counts = {\n  nfa: countBrand('Wardah'),\n  bisa: countBrand('Camille Beauty'),\n  vinix: countBrand('Glad2Glow')\n};\n\nconst pct = (n) => total > 0 ? ((n / total) * 100).toFixed(1) : '0.0';\n\nconst sov = {\n  nfa: pct(counts.nfa),\n  bisa: pct(counts.bisa),\n  vinix: pct(counts.vinix)\n};\n\nconst combinedText = allItems\n  .map(i => `[${i.json.brand}] ${i.json.title || ''} - ${i.json.snippet || ''}`)\n  .join('\\n');\n\nreturn [{\n  json: {\n    metrics: {\n      total_mentions: total,\n      breakdown: counts,\n      share_of_voice: sov\n    },\n    combinedText\n  }\n\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        32
+      ],
+      "id": "6c604e87-7e7f-48e9-96ef-bd88b8d1cff2",
+      "name": "Menyiapkan Teks AI"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Lakukan analisis kompetitif berdasarkan DATA METRICS berikut:\n- Total Mentions: {{ $json.metrics.total_mentions }}\n- Wardah: {{ $json.metrics.breakdown.nfa }} mention ({{ $json.metrics.share_of_voice.nfa }}%)\n- Camille Beauty: {{ $json.metrics.breakdown.bisa }} mention ({{ $json.metrics.share_of_voice.bisa }}%)\n- Glad2Glow: {{ $json.metrics.breakdown.vinix }} mention ({{ $json.metrics.share_of_voice.vinix }}%)\n\nDan DATA MENTAH berikut:\n{{ $json.combinedText }}\n\nTugas Anda:\n1. Analisis sentimen berita tiap brand (Positif / Netral / Negatif).\n2. Berikan skor reputasi online (skala 1-10) untuk Wardah, Camille Beauty, dan Glad2Glow berdasarkan data mentah. Jelaskan alasannya dengan merujuk contoh judul berita.\n3. Buat ringkasan eksekutif dan rekomendasi strategis untuk Wardah.\n\nBerikan jawaban HANYA dalam format JSON valid, tanpa teks pembuka, tanpa penutup, dan tanpa tanda ```. Gunakan struktur persis seperti ini:\n\n{\n  \"executive_summary\": \"Ringkasan eksekutif 3-4 kalimat.\",\n  \"scores\": [\n    {\n      \"brand\": \"Wardah\",\n      \"score\": 8,\n      \"sentiment\": \"Positif\",\n      \"reason\": \"Alasan singkat.\"\n    },\n    {\n      \"brand\": \"Camille Beauty\",\n      \"score\": 7,\n      \"sentiment\": \"Netral\",\n      \"reason\": \"Alasan singkat.\"\n    },\n    {\n      \"brand\": \"Glad2Glow\",\n      \"score\": 6,\n      \"sentiment\": \"Netral\",\n      \"reason\": \"Alasan singkat.\"\n    }\n  ],\n  \"recommendations\": [\n    \"Rekomendasi 1\",\n    \"Rekomendasi 2\",\n    \"Rekomendasi 3\"\n  ]\n}\n\nJangan gunakan tanda kutip ganda (\") di dalam isi teks. Gunakan tanda kutip tunggal (') jika perlu mengutip judul berita.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1152,
+        32
+      ],
+      "id": "84f1f359-6b79-4a2e-b577-9acfa2664e5b",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        304
+      ],
+      "id": "af9bc7a0-d9c8-4961-9ccb-1828e6c48a88",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "UAJRu4At7mX1xpZd",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/news",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"q\": \"Wardah\",\n  \"gl\": \"id\",\n  \"hl\": \"id\",\n  \"num\": 10\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "e89e2eb6-a758-428d-b795-c3908e0798ca",
+      "name": "Wardah",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UY4jJS3ASrT2HdHg",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/news",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"q\": \"Camille Beauty\",\n  \"gl\": \"id\",\n  \"hl\": \"id\",\n  \"num\": 10\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        208
+      ],
+      "id": "4c886c47-9e95-471c-aa0f-f36c24f24bd2",
+      "name": "Camille Beauty",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UY4jJS3ASrT2HdHg",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://google.serper.dev/news",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"q\": \"Glad2Glow\",\n  \"gl\": \"id\",\n  \"hl\": \"id\",\n  \"num\": 10\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        432
+      ],
+      "id": "7e25c991-e51e-4ee0-b311-f50f2f654136",
+      "name": "Glad2Glow",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "UY4jJS3ASrT2HdHg",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1I9gSHHlMs8z9mFeGRjJjqGoHLiO-Cwz_zLQzhig5YMQ",
+          "mode": "list",
+          "cachedResultName": "Compotitor Monitoring",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1I9gSHHlMs8z9mFeGRjJjqGoHLiO-Cwz_zLQzhig5YMQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hasil",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1I9gSHHlMs8z9mFeGRjJjqGoHLiO-Cwz_zLQzhig5YMQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Tanggal": "={{ $now.format('yyyy-MM-dd HH:mm') }}",
+            "Total Mention": "={{ $('Menyiapkan Teks AI').first().json.metrics.total_mentions }}",
+            "Wardah Mention": "={{ $('Menyiapkan Teks AI').first().json.metrics.breakdown.nfa }}",
+            "Camille Beauty Mention": "={{ $('Menyiapkan Teks AI').first().json.metrics.breakdown.bisa }}",
+            "Glad2Glow Mention": "={{ $('Menyiapkan Teks AI').first().json.metrics.breakdown.vinix }}",
+            "Wardah SoV": "={{ $('Menyiapkan Teks AI').first().json.metrics.share_of_voice.nfa }}",
+            "Camille Beauty SoV": "={{ $('Menyiapkan Teks AI').first().json.metrics.share_of_voice.bisa }}",
+            "Glad2Glow SoV": "={{ $('Menyiapkan Teks AI').first().json.metrics.share_of_voice.vinix }}",
+            "Hasil Analisis AI": "={{ $json.text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Tanggal",
+              "displayName": "Tanggal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Total Mention",
+              "displayName": "Total Mention",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Wardah Mention",
+              "displayName": "Wardah Mention",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Camille Beauty Mention",
+              "displayName": "Camille Beauty Mention",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Glad2Glow Mention",
+              "displayName": "Glad2Glow Mention",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Wardah SoV",
+              "displayName": "Wardah SoV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Camille Beauty SoV",
+              "displayName": "Camille Beauty SoV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Glad2Glow SoV",
+              "displayName": "Glad2Glow SoV",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hasil Analisis AI",
+              "displayName": "Hasil Analisis AI",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1520,
+        32
+      ],
+      "id": "127c6ecd-dcd4-4a2b-b8d5-30a5a250447d",
+      "name": "Mencatat Hasil",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JOHMSN79ivVoskg8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const METRICS_NODE = 'Menyiapkan Teks AI';\nconst AI_NODE = 'Basic LLM Chain';\n\nconst brands = [\n  { key: 'nfa',   name: 'Wardah' },\n  { key: 'bisa',  name: 'Camille Beauty' },\n  { key: 'vinix', name: 'Glad2Glow' }\n];\n\nconst metrics = $(METRICS_NODE).first().json.metrics;\nconst rawText = $(AI_NODE).first().json.text || '';\n\nlet ai;\ntry {\n  let cleaned = rawText\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  const start = cleaned.indexOf('{');\n  const end = cleaned.lastIndexOf('}');\n  cleaned = cleaned.substring(start, end + 1);\n\n  // Hapus karakter kontrol yang membuat JSON.parse gagal\n  cleaned = cleaned.replace(/[\\u0000-\\u001F]+/g, ' ');\n\n  ai = JSON.parse(cleaned);\n} catch (e) {\n  const m = rawText.match(/\"executive_summary\"\\s*:\\s*\"([\\s\\S]*?)\"\\s*,\\s*\"scores\"/);\n  ai = {\n    executive_summary: m ? m[1] : 'Ringkasan tidak dapat dibaca. Jalankan ulang workflow.',\n    scores: [],\n    recommendations: []\n  };\n}\n\nconst esc = (s) => String(s ?? '-')\n  .replace(/&/g, '&amp;')\n  .replace(/</g, '&lt;')\n  .replace(/>/g, '&gt;');\n\nconst findScore = (name, idx) => {\n  const list = ai.scores || [];\n  return list.find(s => String(s.brand).toLowerCase() === name.toLowerCase()) || list[idx] || {};\n};\n\nconst currentTime = DateTime.now().toFormat('dd LLLL yyyy, HH:mm');\n\nlet tableRows = '';\nlet barRows = '';\n\nbrands.forEach((b, i) => {\n  const mention = metrics.breakdown[b.key] ?? 0;\n  const sov = Number(metrics.share_of_voice[b.key] ?? 0);\n  const sc = findScore(b.name, i);\n\n  tableRows += `\n    <tr>\n      <td><strong>${esc(b.name)}</strong></td>\n      <td class=\"center\">${esc(mention)}</td>\n      <td class=\"center\">${sov.toFixed(1)}%</td>\n      <td class=\"center score\">${esc(sc.score)}/10</td>\n      <td class=\"center\">${esc(sc.sentiment)}</td>\n      <td>${esc(sc.reason)}</td>\n    </tr>`;\n\n  barRows += `\n    <div class=\"bar-row\">\n      <div class=\"bar-label\">${esc(b.name)}</div>\n      <div class=\"bar-track\"><div class=\"bar-fill\" style=\"width:${sov}%\"></div></div>\n      <div class=\"bar-value\">${sov.toFixed(1)}%</div>\n    </div>`;\n});\n\nconst recommendations = (ai.recommendations || [])\n  .map(r => `<li>${esc(r)}</li>`).join('');\n\nconst html = `<!DOCTYPE html>\n<html lang=\"id\">\n<head>\n<meta charset=\"UTF-8\">\n<style>\n  @page { size: A4; margin: 15mm; }\n  body { font-family: Arial, Helvetica, sans-serif; color: #222; font-size: 12px; line-height: 1.5; -webkit-print-color-adjust: exact; }\n  .header { background: #1f3a93; color: #fff; padding: 20px; border-radius: 6px; }\n  .header h1 { margin: 0 0 4px; font-size: 22px; }\n  .header p { margin: 0; font-size: 11px; opacity: .9; }\n  h2 { color: #1f3a93; border-bottom: 2px solid #e67e22; padding-bottom: 4px; margin-top: 24px; font-size: 15px; }\n  .summary { background: #f4f6fb; border-left: 4px solid #1f3a93; padding: 12px 14px; }\n  .kpi { display: flex; gap: 10px; margin-top: 12px; }\n  .kpi div { flex: 1; background: #fff; border: 1px solid #dde2ee; border-radius: 6px; padding: 10px; text-align: center; }\n  .kpi .num { font-size: 20px; font-weight: bold; color: #e67e22; }\n  table { width: 100%; border-collapse: collapse; margin-top: 8px; }\n  th { background: #1f3a93; color: #fff; padding: 8px; text-align: left; font-size: 11px; }\n  td { padding: 8px; border-bottom: 1px solid #dde2ee; vertical-align: top; }\n  tr:nth-child(even) td { background: #f9fafc; }\n  .center { text-align: center; }\n  .score { font-weight: bold; color: #1f3a93; }\n  .bar-row { display: flex; align-items: center; margin: 8px 0; }\n  .bar-label { width: 120px; font-weight: bold; }\n  .bar-track { flex: 1; background: #e9ecf3; height: 16px; border-radius: 8px; overflow: hidden; }\n  .bar-fill { background: #e67e22; height: 16px; }\n  .bar-value { width: 55px; text-align: right; font-weight: bold; }\n  .footer { margin-top: 30px; font-size: 10px; color: #888; text-align: center; }\n</style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>Laporan Competitor Monitoring</h1>\n    <p>Dibuat otomatis pada ${esc(currentTime)}</p>\n  </div>\n\n  <h2>Ringkasan Eksekutif</h2>\n  <div class=\"summary\">${esc(ai.executive_summary)}</div>\n  <div class=\"kpi\">\n    <div><div class=\"num\">${esc(metrics.total_mentions)}</div>Total Mention</div>\n    <div><div class=\"num\">${brands.length}</div>Brand Dipantau</div>\n  </div>\n\n  <h2>Tabel Perbandingan Brand</h2>\n  <table>\n    <tr>\n      <th>Brand</th><th>Mention</th><th>SoV</th>\n      <th>Skor Reputasi</th><th>Sentimen</th><th>Alasan</th>\n    </tr>\n    ${tableRows}\n  </table>\n\n  <h2>Share of Voice</h2>\n  ${barRows}\n\n  <h2>Rekomendasi Strategis</h2>\n  <ul>${recommendations || '<li>Tidak ada rekomendasi.</li>'}</ul>\n\n  <div class=\"footer\">Laporan ini dihasilkan otomatis oleh workflow n8n.</div>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        32
+      ],
+      "id": "3250021b-b610-4a90-8a4e-8a45310dcd55",
+      "name": "Generate HTML"
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "1613990544",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "Laporan Competitor Monitoring"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2192,
+        32
+      ],
+      "id": "747e3002-8855-4a37-9af7-35e0acfed3de",
+      "name": "Send a document",
+      "webhookId": "f528c294-ba07-457c-bb54-a7b9c38a2c80",
+      "credentials": {
+        "telegramApi": {
+          "id": "FX70E4ediHt2v7rn",
+          "name": "Monitoring Sentimen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfshift.io/v3/convert/pdf",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "source",
+              "value": "={{ $json.html }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1968,
+        32
+      ],
+      "id": "632c6740-a260-4166-ae67-f76c00e1575d",
+      "name": "HTML to PDF",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "i68y0WtlA4XkdIEf",
+          "name": "Header Auth account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Wardah",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Camille Beauty",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Glad2Glow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Gabungkan Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gabungkan Data": {
+      "main": [
+        [
+          {
+            "node": "Menyiapkan Teks AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menyiapkan Teks AI": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wardah": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Camille Beauty": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Glad2Glow": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Mencatat Hasil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mencatat Hasil": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML": {
+      "main": [
+        [
+          {
+            "node": "HTML to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML to PDF": {
+      "main": [
+        [
+          {
+            "node": "Send a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0247f2c6-8415-4beb-86dc-00872516fba9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dc96f10ae7dc95d3c138575ba243a0a167923dbcb524841d451aadf9135d5fb3"
+  },
+  "nodeGroups": [],
+  "id": "DTrcryNkYOGx2ZM8",
+  "tags": []
+}
